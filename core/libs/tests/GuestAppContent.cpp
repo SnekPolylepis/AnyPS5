@@ -15,6 +15,7 @@ int APS5_VABI sceAppContentAddcontUnmount(const AppContentMountPoint*);
 int APS5_VABI sceAppContentAddcontEnqueueDownload(uint32_t, const NpUnifiedEntitlementLabel*);
 int APS5_VABI sceAppContentAddcontDelete(uint32_t, const NpUnifiedEntitlementLabel*);
 int APS5_VABI sceAppContentGetAddcontDownloadProgress(uint32_t, const NpUnifiedEntitlementLabel*, void*);
+int APS5_VABI sceAppContentTemporaryDataMount(AppContentMountPoint*);
 int APS5_VABI sceAppContentTemporaryDataMount2(uint32_t, AppContentMountPoint*);
 int APS5_VABI sceAppContentTemporaryDataUnmount(const AppContentMountPoint*);
 int APS5_VABI sceAppContentTemporaryDataFormat(const AppContentMountPoint*);
@@ -46,6 +47,7 @@ int main() {
     Require(sceAppContentGetAddcontInfo(0, nullptr, nullptr) == notInitialized);
     Require(sceAppContentGetAddcontInfoList(0, nullptr, 0, nullptr) == notInitialized);
     Require(sceAppContentAppParamGetInt(0, nullptr) == notInitialized);
+    Require(sceAppContentTemporaryDataMount(nullptr) == notInitialized);
     Require(sceAppContentTemporaryDataMount2(0, nullptr) == notInitialized);
     Require(sceAppContentTemporaryDataUnmount(nullptr) == notInitialized);
     Require(sceAppContentTemporaryDataFormat(nullptr) == notInitialized);
@@ -155,6 +157,7 @@ int main() {
     Require(access_nid_postfix("/temp0/old.txt", 0) == -1);
     Require(sceAppContentTemporaryDataUnmount(nullptr) == ErrorParameter);
     Require(sceAppContentTemporaryDataUnmount(&mountPoint) == ErrorNotMounted);
+    Require(sceAppContentTemporaryDataMount(nullptr) == ErrorParameter);
     Require(sceAppContentTemporaryDataMount2(0, nullptr) == ErrorParameter);
     std::memset(&mountPoint, 0x5a, sizeof(mountPoint));
     Require(sceAppContentTemporaryDataMount2(2, &mountPoint) == ErrorParameter);
@@ -189,6 +192,23 @@ int main() {
     { std::ofstream file(backing / "remove.txt"); file << "format"; }
     Require(sceAppContentTemporaryDataUnmount(&mountPoint) == 0);
     Require(sceAppContentTemporaryDataMount2(1, &mountPoint) == 0);
+    Require(std::filesystem::is_empty(backing));
+    Require(sceAppContentTemporaryDataUnmount(&mountPoint) == 0);
+    { std::ofstream file(backing / "legacy-old.txt"); file << "old"; }
+    std::memset(&mountPoint, 0x5a, sizeof(mountPoint));
+    Require(sceAppContentTemporaryDataMount(&mountPoint) == 0);
+    Require(std::strcmp(mountPoint.data, "/temp0") == 0);
+    Require(std::filesystem::is_empty(backing));
+    { std::ofstream file(backing / "legacy-current.txt"); file << "current"; }
+    AppContentMountPoint secondLegacy = untouched;
+    Require(sceAppContentTemporaryDataMount(&secondLegacy) == ErrorBusy);
+    Require(std::memcmp(&secondLegacy, &untouched, sizeof(secondLegacy)) == 0);
+    Require(std::filesystem::exists(backing / "legacy-current.txt"));
+    Require(sceAppContentTemporaryDataUnmount(&mountPoint) == 0);
+    Require(sceAppContentTemporaryDataMount2(0, &mountPoint) == 0);
+    Require(access_nid_postfix("/temp0/legacy-current.txt", 0) == 0);
+    Require(sceAppContentTemporaryDataUnmount(&mountPoint) == 0);
+    Require(sceAppContentTemporaryDataMount(&mountPoint) == 0);
     Require(std::filesystem::is_empty(backing));
     Require(sceAppContentTemporaryDataUnmount(&mountPoint) == 0);
     unsigned char info[24];
