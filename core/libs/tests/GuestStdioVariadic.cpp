@@ -273,6 +273,25 @@ int main() {
     nullInput->Close();
     delete nullInput;
 
+#ifndef _WIN32
+    FileStream* wideInput = SeededStream("  word \xC3\xA9t\xC3\xA9 ab=cd Z tail");
+    char16_t wideWord[8]{};
+    char16_t wideNext[8]{};
+    char16_t wideKey[4]{};
+    char16_t wideChar = 0;
+    Require(fscanf_nid_postfix(wideInput, "%ls %S", wideWord, wideNext) == 2, "fscanf %ls and %S");
+    Require(std::u16string(wideWord) == u"word" && std::u16string(wideNext) == u"été", "fscanf decodes UTF-8 into 16-bit units");
+    Require(ScanStream(wideInput, " %3l[a-z]=%2ls %lc", wideKey, wideWord, &wideChar) == 3, "vfscanf %l[, a wide width and %lc");
+    Require(std::u16string(wideKey) == u"ab" && std::u16string(wideWord) == u"cd" && wideChar == u'Z', "vfscanf wide values");
+    Require(NextByte(wideInput) == ' ', "the stream stops after the last wide character");
+    char16_t sizedWide[3] = {u'x', u'x', u'x'};
+    Require(fscanf_s_nid_postfix(wideInput, "%ls", sizedWide, 3u) == 0 && sizedWide[0] == u'\0', "fscanf_s rejects an undersized wide buffer");
+    Require(fscanf_nid_postfix(wideInput, "%ls", wideWord) == 1 && std::u16string(wideWord) == u"il", "the rejected field's characters are consumed");
+    Require(fscanf_nid_postfix(wideInput, "%ls", wideWord) == EOF, "fscanf %ls at end of file");
+    wideInput->Close();
+    delete wideInput;
+#endif
+
     FileStream* const savedInput = __stdinp_nid_postfix;
     FileStream* redirected = SeededStream("21 word 3 more");
     __stdinp_nid_postfix = redirected;
